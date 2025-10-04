@@ -37,7 +37,7 @@ export PRISMA_URL = your-value-here
   
 ### PIP (recommended)
 ```bash
-pip install ddfr
+pip install git+https://github.com/PlaytikaSecurity/ddfr.git
 ```
 
 ### Manual
