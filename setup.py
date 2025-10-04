@@ -2,7 +2,6 @@ import os
 import platform
 import subprocess
 import sys
-import requests
 import json
 from setuptools import setup, find_packages
 
