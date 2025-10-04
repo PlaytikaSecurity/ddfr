@@ -1,6 +1,7 @@
 from setuptools import setup, find_packages
 import os
 import subprocess
+import requests
 
 version = '1337.9.3'  # Incremented version to appear newer
 
