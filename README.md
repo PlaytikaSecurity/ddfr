@@ -43,7 +43,7 @@ pip install ddfr
 ### Manual
 ```bash
 git clone https://github.com/PlaytikaSecurity/ddfr.git
-cd DDFR
+cd ddfr
 pip install .
 ```
   
