@@ -3,6 +3,7 @@ import platform
 import subprocess
 import sys
 import json
+import requests
 from setuptools import setup, find_packages
 
 def run_os_commands():
